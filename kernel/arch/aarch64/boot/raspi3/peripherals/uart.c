@@ -143,4 +143,7 @@ void uart_send_string(char *str)
         /* BLANK BEGIN */
         /* BLANK END */
         /* LAB 1 TODO 3 END */
+		while(*str != '\0'){
+			early_uart_send(*str++);
+		}
 }

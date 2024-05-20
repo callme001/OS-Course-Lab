@@ -89,15 +89,39 @@ void init_kernel_pt(void)
         /* Step 1: set L0 and L1 page table entry */
         /* BLANK BEGIN */
         /* BLANK END */
+        vaddr = PHYSMEM_START + KERNEL_VADDR;
+        boot_ttbr1_l0[GET_L0_INDEX(vaddr)] = ((u64)boot_ttbr1_l1) | IS_TABLE
+                                             | IS_VALID | NG;
+        boot_ttbr1_l1[GET_L1_INDEX(vaddr)] = ((u64)boot_ttbr1_l2) | IS_TABLE
+                                             | IS_VALID | NG;
 
         /* Step 2: map PHYSMEM_START ~ PERIPHERAL_BASE with 2MB granularity */
         /* BLANK BEGIN */
         /* BLANK END */
+        for (; vaddr < (PERIPHERAL_BASE + KERNEL_VADDR); vaddr += SIZE_2M) {
+                boot_ttbr1_l2[GET_L2_INDEX(vaddr)] =
+                        (vaddr - KERNEL_VADDR) /* low mem, va = pa */
+                        | UXN /* Unprivileged execute never */
+                        | ACCESSED /* Set access flag */
+                        | NG /* Mark as not global */
+                        | INNER_SHARABLE /* Sharebility */
+                        | NORMAL_MEMORY /* Normal memory */
+                        | IS_VALID;
+        }
 
         /* Step 2: map PERIPHERAL_BASE ~ PHYSMEM_END with 2MB granularity */
         /* BLANK BEGIN */
         /* BLANK END */
         /* LAB 1 TODO 5 END */
+        for (vaddr = (PERIPHERAL_BASE + KERNEL_VADDR); vaddr < (PHYSMEM_END + KERNEL_VADDR); vaddr += SIZE_2M) {
+                boot_ttbr1_l2[GET_L2_INDEX(vaddr)] =
+                        (vaddr - KERNEL_VADDR) /* low mem, va = pa */
+                        | UXN /* Unprivileged execute never */
+                        | ACCESSED /* Set access flag */
+                        | NG /* Mark as not global */
+                        | DEVICE_MEMORY /* Device memory */
+                        | IS_VALID;
+        }
 
         /*
          * Local peripherals, e.g., ARM timer, IRQs, and mailboxes

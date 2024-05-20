@@ -285,7 +285,7 @@ _docker_run() {
 }
 
 _main() {
-    run_in_docker=true
+    run_in_docker=false
     while [ $# -gt 0 ]; do
         case $1 in
         help | --help | -h)

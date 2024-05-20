@@ -71,6 +71,7 @@ BEGIN_FUNC(arm64_elX_to_el1)
 	/* LAB 1 TODO 1 BEGIN */
 	/* BLANK BEGIN */
 	/* BLANK END */
+	mrs x9, CurrentEL
 	/* LAB 1 TODO 1 END */
 
 	// Check the current exception level.
@@ -90,6 +91,10 @@ BEGIN_FUNC(arm64_elX_to_el1)
 	/* LAB 1 TODO 2 BEGIN */
 	/* BLANK BEGIN */
 	/* BLANK END */
+	adr x9, .Ltarget
+	msr elr_el3, x9
+	mov x9, SPSR_ELX_DAIF | SPSR_ELX_EL1H
+	msr spsr_el3, x9
 	/* LAB 1 TODO 2 END */
 
 .Lin_el2:
@@ -270,6 +275,8 @@ BEGIN_FUNC(el1_mmu_activate)
 	/* BLANK END */
 	/* LAB 1 TODO 4 END */
 	/* Disable alignment checking */
+
+	orr     x8, x8, #SCTLR_EL1_M
 	bic     x8, x8, #SCTLR_EL1_A
 	bic     x8, x8, #SCTLR_EL1_SA0
 	bic     x8, x8, #SCTLR_EL1_SA
