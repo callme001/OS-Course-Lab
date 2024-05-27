@@ -89,10 +89,13 @@ static struct page *merge_chunk(struct phys_mem_pool *pool, struct page *chunk)
          * if possible.
          */
         /* BLANK BEGIN */
-        int bit = 12 + chunk->order;
         struct page* buddy = get_buddy_chunk(pool, chunk);
+        if(buddy == 0){
+                return chunk;
+        }
         vaddr_t vaddr = page_to_virt(chunk);
         vaddr_t buddy_vaddr = page_to_virt(buddy);
+        struct page *page = chunk;
         
         if(buddy->allocated == 0){
                 int order = chunk->order;
@@ -103,10 +106,10 @@ static struct page *merge_chunk(struct phys_mem_pool *pool, struct page *chunk)
                 
                 vaddr_t merge_vaddr = vaddr < buddy_vaddr ? vaddr : buddy_vaddr;
                 struct page *merge_page = virt_to_page((void *)merge_vaddr);
-                merge_page->order ++;
-                buddy_free_pages(pool, merge_page);
+                merge_page->order = order + 1;
+                page = merge_page;
         }
-
+        return page;
         /* BLANK END */
         /* LAB 2 TODO 1 END */
 }
@@ -221,7 +224,20 @@ void buddy_free_pages(struct phys_mem_pool *pool, struct page *page)
         pool->free_lists[order].nr_free ++;
         free_list = &(pool->free_lists[order].free_list);
         list_append(&(page->node), free_list);
-        merge_chunk(pool, page);
+        struct page *chunk = page;
+        for(int cur_order = order; cur_order < BUDDY_MAX_ORDER; ){
+                chunk = merge_chunk(pool, chunk);
+                if(chunk->order == cur_order){
+                        break;
+                }else{
+                        cur_order = chunk->order;
+                        chunk->allocated = 0;
+                        struct free_list *free_lists = &(pool->free_lists[chunk->order]);
+                        free_lists->nr_free ++;
+                        list_append(&(chunk->node), &(free_lists->free_list));
+                }
+        }
+        
         /* BLANK END */
         /* LAB 2 TODO 1 END */
 
