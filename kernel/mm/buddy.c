@@ -89,13 +89,16 @@ static struct page *merge_chunk(struct phys_mem_pool *pool, struct page *chunk)
          * if possible.
          */
         /* BLANK BEGIN */
+        if(chunk->order >= (BUDDY_MAX_ORDER - 1)){
+                return NULL;
+        }
+
         struct page* buddy = get_buddy_chunk(pool, chunk);
         if(buddy == 0){
-                return chunk;
+                return NULL;
         }
         vaddr_t vaddr = page_to_virt(chunk);
         vaddr_t buddy_vaddr = page_to_virt(buddy);
-        struct page *page = chunk;
         
         if(buddy->allocated == 0){
                 int order = chunk->order;
@@ -106,10 +109,14 @@ static struct page *merge_chunk(struct phys_mem_pool *pool, struct page *chunk)
                 
                 vaddr_t merge_vaddr = vaddr < buddy_vaddr ? vaddr : buddy_vaddr;
                 struct page *merge_page = virt_to_page((void *)merge_vaddr);
-                merge_page->order = order + 1;
-                page = merge_page;
+                merge_page->order ++;
+                merge_page->allocated = 0;
+                struct free_list *free_lists = &(pool->free_lists[merge_page->order]);
+                free_lists->nr_free ++;
+                list_append(&(merge_page->node), &(free_lists->free_list));
+                return merge_page;
         }
-        return page;
+        return NULL;
         /* BLANK END */
         /* LAB 2 TODO 1 END */
 }
@@ -158,6 +165,7 @@ void init_buddy(struct phys_mem_pool *pool, struct page *start_page,
         for (page_idx = 0; page_idx < page_num; ++page_idx) {
                 page = start_page + page_idx;
                 buddy_free_pages(pool, page);
+                // kdebug("buddy free pages 0x%lx 0x%lx \n", page_num, page_idx);
         }
 }
 
@@ -225,19 +233,12 @@ void buddy_free_pages(struct phys_mem_pool *pool, struct page *page)
         free_list = &(pool->free_lists[order].free_list);
         list_append(&(page->node), free_list);
         struct page *chunk = page;
-        for(int cur_order = order; cur_order < BUDDY_MAX_ORDER; ){
+        for(int cur_order = order; cur_order < BUDDY_MAX_ORDER;cur_order++ ){
                 chunk = merge_chunk(pool, chunk);
-                if(chunk->order == cur_order){
+                if(chunk == NULL){
                         break;
-                }else{
-                        cur_order = chunk->order;
-                        chunk->allocated = 0;
-                        struct free_list *free_lists = &(pool->free_lists[chunk->order]);
-                        free_lists->nr_free ++;
-                        list_append(&(chunk->node), &(free_lists->free_list));
                 }
-        }
-        
+        }        
         /* BLANK END */
         /* LAB 2 TODO 1 END */
 
