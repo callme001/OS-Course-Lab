@@ -56,25 +56,26 @@ static struct page *split_chunk(struct phys_mem_pool *pool, int order,
         if(order == 0){
                 return NULL;
         }
+        if(chunk->order < order){
+                BUG("split_chunk error, chunk->order is less order\n");
+                return NULL;
+        }
+        if(chunk->order == order){
+                return chunk;
+        }
 
-        struct free_list *free_list = &(pool->free_lists[order]);
+        struct free_list *free_list = &(pool->free_lists[chunk->order]);
         free_list->nr_free --;
         list_del(&(chunk->node));
         
-        order --;
-        vaddr_t chunk_vaddr = page_to_virt(chunk);
-        vaddr_t buddy_vaddr = chunk_vaddr + (1 << (order + 12));
-        struct page * page = virt_to_page((void *)chunk_vaddr);
-        struct page * buddy = virt_to_page((void *)buddy_vaddr);
-        page->order = order;
-        page->allocated = 0;
-        buddy->order = order;
-        buddy->allocated = 0;
-        free_list = &(pool->free_lists[order]);
+        chunk->order--;
+        struct page *buddy = get_buddy_chunk(pool, chunk);
+
+        free_list = &(pool->free_lists[chunk->order]);
         free_list->nr_free += 2;
-        list_add(&(page->node), &(free_list->free_list));
-        list_add(&(buddy->node), &(free_list->free_list));
-        return page;
+        list_append(&(chunk->node), &(free_list->free_list));
+        list_append(&(buddy->node), &(free_list->free_list));
+        return split_chunk(pool, order, chunk);
         /* BLANK END */
         /* LAB 2 TODO 1 END */
 }
@@ -189,23 +190,22 @@ struct page *buddy_get_pages(struct phys_mem_pool *pool, int order)
          * in the free lists, then split it if necessary.
          */
         /* BLANK BEGIN */
-        cur_order = order;
-        struct free_list *lists = &(pool->free_lists[cur_order]);
-        free_list = &(lists->free_list);
-        if(lists->nr_free == 0){
-                struct page *trunk = buddy_get_pages(pool, order++);
-                if(trunk == NULL){
-                        return NULL;
+        for( cur_order = order; cur_order < BUDDY_MAX_ORDER; cur_order ++){
+                struct free_list *lists = &(pool->free_lists[cur_order]);
+                free_list = &(lists->free_list);
+                if(lists->nr_free > 0){
+                        page = virt_to_page((void *)free_list);
+                        if(page->order > order){
+                                page = split_chunk(pool, order, page);
+                        }
+                        break;
                 }
-                page = split_chunk(pool, cur_order, trunk);
-                lists->nr_free --;
-                list_del(free_list);
+        }
+        if(page != NULL){
                 page->allocated = 1;
-        }else{
+                struct free_list *lists = &(pool->free_lists[page->order]);
                 lists->nr_free --;
-                list_del(free_list);
-                page = virt_to_page((void *)free_list);
-                page->allocated = 1;
+                list_del(&(page->node));
         }
         /* BLANK END */
         /* LAB 2 TODO 1 END */
