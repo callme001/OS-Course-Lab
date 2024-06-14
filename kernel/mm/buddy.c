@@ -53,9 +53,6 @@ static struct page *split_chunk(struct phys_mem_pool *pool, int order,
          * a suitable free list.
          */
         /* BLANK BEGIN */
-        if(order == 0){
-                return NULL;
-        }
         if(chunk->order < order){
                 BUG("split_chunk error, chunk->order is less order\n");
                 return NULL;
@@ -69,7 +66,10 @@ static struct page *split_chunk(struct phys_mem_pool *pool, int order,
         list_del(&(chunk->node));
         
         chunk->order--;
+        chunk->allocated = 0;
         struct page *buddy = get_buddy_chunk(pool, chunk);
+        buddy->order = chunk->order;
+        buddy->allocated = 0;
 
         free_list = &(pool->free_lists[chunk->order]);
         free_list->nr_free += 2;
@@ -108,9 +108,9 @@ static struct page *merge_chunk(struct phys_mem_pool *pool, struct page *chunk)
                 list_del(&(chunk->node));
                 list_del(&(buddy->node));
                 
-                vaddr_t merge_vaddr = vaddr < buddy_vaddr ? vaddr : buddy_vaddr;
+                vaddr_t merge_vaddr = vaddr & buddy_vaddr;
                 struct page *merge_page = virt_to_page((void *)merge_vaddr);
-                merge_page->order ++;
+                merge_page->order = order+1;
                 merge_page->allocated = 0;
                 struct free_list *free_lists = &(pool->free_lists[merge_page->order]);
                 free_lists->nr_free ++;
@@ -192,9 +192,9 @@ struct page *buddy_get_pages(struct phys_mem_pool *pool, int order)
         /* BLANK BEGIN */
         for( cur_order = order; cur_order < BUDDY_MAX_ORDER; cur_order ++){
                 struct free_list *lists = &(pool->free_lists[cur_order]);
-                free_list = &(lists->free_list);
                 if(lists->nr_free > 0){
-                        page = virt_to_page((void *)free_list);
+                        free_list = &(lists->free_list);
+                        page = (struct page*)(free_list->next);
                         if(page->order > order){
                                 page = split_chunk(pool, order, page);
                         }
@@ -227,11 +227,14 @@ void buddy_free_pages(struct phys_mem_pool *pool, struct page *page)
          * a suitable free list.
          */
         /* BLANK BEGIN */
-        page->allocated = 0;
-        order = page->order;
-        pool->free_lists[order].nr_free ++;
-        free_list = &(pool->free_lists[order].free_list);
-        list_append(&(page->node), free_list);
+        if(page->allocated == 1){
+                page->allocated = 0;
+                order = page->order;
+                pool->free_lists[order].nr_free ++;
+                free_list = &(pool->free_lists[order].free_list);
+                list_append(&(page->node), free_list);
+        }
+        
         struct page *chunk = page;
         for(int cur_order = order; cur_order < BUDDY_MAX_ORDER;cur_order++ ){
                 chunk = merge_chunk(pool, chunk);
